@@ -12,4 +12,4 @@
 
 (defn -main []
   (println "* Running examples...")
-  (seq (ex1)))
+  (ex1))
