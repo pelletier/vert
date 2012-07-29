@@ -31,7 +31,9 @@
                             (Token. :comment content new-lineno)))
     (Token. :text token new-lineno)))
 
-(defn lexer-create-tokens [raw-tokens]
+(defn lexer-create-tokens
+  "Given a vector of the source of tokens, returns a vector of Token objects."
+  [raw-tokens]
   (defn create-token [remaining-tokens accumulator in-tag lineno]
     (if (empty? remaining-tokens)
       accumulator
@@ -41,12 +43,25 @@
         (recur (rest remaining-tokens) (conj accumulator parsed-token) (not in-tag) new-lineno))))
   (create-token raw-tokens [] false 0))
 
-(defn lexer [template-string]
+
+(defn lexer
+  "Given the source of a template, returns a vector of tokens."
+  [template-string]
   (let [raw-tokens (utils/re-tokenize tag-re template-string)]
     (lexer-create-tokens raw-tokens)))
 
-(defn read-file [templates-root template-name]
+
+(defn read-file
+  "Read the content of a template file within tempaltes-root."
+  [templates-root template-name]
   (slurp (.getPath (clojure.java.io/file templates-root template-name))))
 
-(defn render [funcs templates-root, context, template-name]
+
+(defn render
+  "Render a template file using the given context.
+   funcs is a map of available tags and filters.
+   templates-root is the path to a directory containing the templates.
+   context is a map of available variables.
+   template-name is the path of your template file, relative to tempalates-root."
+  [funcs templates-root, context, template-name]
   (lexer (read-file templates-root template-name)))
