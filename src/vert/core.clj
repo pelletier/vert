@@ -1,6 +1,11 @@
 (ns vert.core
+  (:require [clojure.zip :as zip])
   (:use [clojure.string :as string :only [split]]
         [vert.utils :as utils]))
+
+
+(defn unbalanced-block [] (Exception. "Unable to find a closing block tag."))
+
 
 (def block-tag-start "{%")
 (def block-tag-end "%}")
@@ -10,6 +15,7 @@
 (def comment-tag-end "#}")
 (def translator-comment-mark "Translators")
 
+
 (def tag-re (let [patterns [block-tag-start block-tag-end
                             variable-tag-start variable-tag-end
                             comment-tag-start comment-tag-end]
@@ -18,6 +24,7 @@
 
 
 (deftype Token [token-type contents lineno])
+(deftype Node [node-type token children])
 
 
 (defn new-token [token in-tag new-lineno]
@@ -30,6 +37,7 @@
                                           "")]
                             (Token. :comment content new-lineno)))
     (Token. :text token new-lineno)))
+
 
 (defn lexer-create-tokens
   "Given a vector of the source of tokens, returns a vector of Token objects."
@@ -57,6 +65,62 @@
   (slurp (.getPath (clojure.java.io/file templates-root template-name))))
 
 
+(defn extract-block-name [token]
+  (first (string/split (.contents token) #" ")))
+
+(defn tree-branch? [node]
+  (not (nil? (.children token))))
+
+
+(defn tree-children [node]
+  (.children node))
+
+
+(defn tree-make-node [node children]
+  (Node. (.node-type node) (.token node) children))
+
+
+(defn create-tree []
+  (zipper tree-branch? tree-childre tree-make-node (Node. :root nil [])))
+
+
+; assume the first token in the tokens list is the first token inside the block.
+(defn get-block-tokens [block-name tokens]
+  (let [end-block-name (str "end" block-name)]
+    (defn inner [rem-tokens counter index]
+      (let [tokens-rest (rest rem-tokens)]
+        (cond
+          (= counter 0) (subs tokens index)
+          (empty? rem-tokens) (throw (unbalanced-block))
+          (let [tok-name (extract-block-name (first rem-tokens))
+                next-count (cond
+                             (contains? {end-block-name "end"} tok-name) (dec counter)
+                             (= block-name tok-name) (inc counter)
+                             counter)]
+            (recur tokens-rest next-count (inc index)))))))
+  (inner tokens 1 0))
+
+
+;; Yeah this is not the most useful function ever wrote, but I think it makes
+;; the code a little easier to read.
+(defn skip-tokens [tokens n]
+  (subs tokens n))
+
+
+(defn parser [templates-root funcs tokens-vector]
+  (defn parse-token [remaining-tokens tree]
+    (if (empty? remaining-tokens)
+      tree
+      (let [token (first remaining-tokens)
+            tokens-rest (rest remaining-tokens)]
+        (condp = (.token-type token)
+          :text (recur tokens-rest (zip/append-child tree (Node. :text token nil)))
+          :variable  (recur tokens-rest (zip/append-child tree (Node. :variable token nil)))
+          :comment (recur tokens-rest (zip/append-child tree (Node. :comment token nil)))
+          :block ()))))
+  (parse-token tokens-vector (create-tree)))
+
+
 (defn render
   "Render a template file using the given context.
    funcs is a map of available tags and filters.
@@ -64,4 +128,5 @@
    context is a map of available variables.
    template-name is the path of your template file, relative to tempalates-root."
   [funcs templates-root, context, template-name]
-  (lexer (read-file templates-root template-name)))
+  (parser templates-root funs (lexer (read-file templates-root template-name))))
+  ;(map #(.contents %) (lexer (read-file templates-root template-name))))
