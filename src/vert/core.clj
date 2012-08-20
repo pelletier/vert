@@ -51,7 +51,10 @@
       (let [token (first remaining-tokens)
             new-lineno (+ lineno (utils/count-occurences token \newline))
             parsed-token (new-token token in-tag new-lineno)]
-        (recur (rest remaining-tokens) (conj accumulator parsed-token) (not in-tag) new-lineno)))))
+        (recur (rest remaining-tokens)
+               (conj accumulator parsed-token)
+               (not in-tag)
+               new-lineno)))))
 
 
 (defn lexer
@@ -97,15 +100,15 @@
           (= counter 0) (subs tokens index)
           (empty? rem-tokens) (throw (unbalanced-block))
           :else (let [tok-name (extract-block-name (first rem-tokens))
-                next-count (cond
-                             (contains? {end-block-name "end"} tok-name) (dec counter)
-                             (= block-name tok-name) (inc counter)
-                             :else counter)]
-            (recur tokens-rest next-count (inc index))))))))
+                      next-count (cond
+                                   (contains? {end-block-name "end"} tok-name) (dec counter)
+                                   (= block-name tok-name) (inc counter)
+                                   :else counter)]
+                  (recur tokens-rest next-count (inc index))))))))
 
 
-;; Yeah those are not the most useful functions ever wrote, but I think it makes
-;; the code a little easier to read.
+;; Yeah not the most useful function ever wrote, but I think it makes the code a
+;; little easier to read.
 (defn skip-tokens [tokens n]
   (subs tokens n))
 
