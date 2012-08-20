@@ -90,9 +90,10 @@
 
 
 ; assume the first token in the tokens list is the first token inside the block.
-(defn get-block-tokens [block-name tokens]
-  (let [end-block-name (str "end" block-name)]
-    (loop [rem-tokens tokens
+(defn get-block-tokens [tokens]
+  (let [block-name (extract-block-name (first tokens))
+        end-block-name (str "end" block-name)]
+    (loop [rem-tokens (rest tokens)
             counter 1
             index 0]
       (let [tokens-rest (rest rem-tokens)]
@@ -114,10 +115,6 @@
 
 
 ;; TODO implement me!
-(defn extract-block-tokens [tokens]
-  ())
-
-;; TODO implement me!
 (defn create-block-tree [tokens]
   ())
 
@@ -133,7 +130,7 @@
           :text (recur tokens-rest (zip/append-child tree (Node. :text token nil)))
           :variable  (recur tokens-rest (zip/append-child tree (Node. :variable token nil)))
           :comment (recur tokens-rest (zip/append-child tree (Node. :comment token nil)))
-          :block (let [block-tokens (extract-block-tokens remaining-tokens)
+          :block (let [block-tokens (get-block-tokens remaining-tokens)
                        skipped-tokens (count block-tokens)]
                    (recur (skip-tokens remaining-tokens skipped-tokens)
                           (zip/append-child tree (create-block-tree block-tokens)))))))))
