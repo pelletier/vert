@@ -42,14 +42,16 @@
 (defn lexer-create-tokens
   "Given a vector of the source of tokens, returns a vector of Token objects."
   [raw-tokens]
-  (defn create-token [remaining-tokens accumulator in-tag lineno]
+  (loop [remaining-tokens raw-tokens
+         accumulator []
+         in-tag false
+         lineno 0]
     (if (empty? remaining-tokens)
       accumulator
       (let [token (first remaining-tokens)
             new-lineno (+ lineno (utils/count-occurences token \newline))
             parsed-token (new-token token in-tag new-lineno)]
-        (recur (rest remaining-tokens) (conj accumulator parsed-token) (not in-tag) new-lineno))))
-  (create-token raw-tokens [] false 0))
+        (recur (rest remaining-tokens) (conj accumulator parsed-token) (not in-tag) new-lineno)))))
 
 
 (defn lexer
@@ -69,7 +71,7 @@
   (first (string/split (.contents token) #" ")))
 
 (defn tree-branch? [node]
-  (not (nil? (.children token))))
+  (not (nil? (.children node))))
 
 
 (defn tree-children [node]
@@ -81,34 +83,45 @@
 
 
 (defn create-tree []
-  (zipper tree-branch? tree-childre tree-make-node (Node. :root nil [])))
+  (zip/zipper tree-branch? tree-children tree-make-node (Node. :root nil [])))
 
 
 ; assume the first token in the tokens list is the first token inside the block.
 (defn get-block-tokens [block-name tokens]
   (let [end-block-name (str "end" block-name)]
-    (defn inner [rem-tokens counter index]
+    (loop [rem-tokens tokens
+            counter 1
+            index 0]
       (let [tokens-rest (rest rem-tokens)]
         (cond
           (= counter 0) (subs tokens index)
           (empty? rem-tokens) (throw (unbalanced-block))
-          (let [tok-name (extract-block-name (first rem-tokens))
+          :else (let [tok-name (extract-block-name (first rem-tokens))
                 next-count (cond
                              (contains? {end-block-name "end"} tok-name) (dec counter)
                              (= block-name tok-name) (inc counter)
-                             counter)]
-            (recur tokens-rest next-count (inc index)))))))
-  (inner tokens 1 0))
+                             :else counter)]
+            (recur tokens-rest next-count (inc index))))))))
 
 
-;; Yeah this is not the most useful function ever wrote, but I think it makes
+;; Yeah those are not the most useful functions ever wrote, but I think it makes
 ;; the code a little easier to read.
 (defn skip-tokens [tokens n]
   (subs tokens n))
 
 
+;; TODO implement me!
+(defn extract-block-tokens [tokens]
+  ())
+
+;; TODO implement me!
+(defn create-block-tree [tokens]
+  ())
+
+
 (defn parser [templates-root funcs tokens-vector]
-  (defn parse-token [remaining-tokens tree]
+  (loop [remaining-tokens tokens-vector
+         tree (create-tree)]
     (if (empty? remaining-tokens)
       tree
       (let [token (first remaining-tokens)
@@ -117,8 +130,10 @@
           :text (recur tokens-rest (zip/append-child tree (Node. :text token nil)))
           :variable  (recur tokens-rest (zip/append-child tree (Node. :variable token nil)))
           :comment (recur tokens-rest (zip/append-child tree (Node. :comment token nil)))
-          :block ()))))
-  (parse-token tokens-vector (create-tree)))
+          :block (let [block-tokens (extract-block-tokens remaining-tokens)
+                       skipped-tokens (count block-tokens)]
+                   (recur (skip-tokens remaining-tokens skipped-tokens)
+                          (zip/append-child tree (create-block-tree block-tokens)))))))))
 
 
 (defn render
@@ -128,5 +143,4 @@
    context is a map of available variables.
    template-name is the path of your template file, relative to tempalates-root."
   [funcs templates-root, context, template-name]
-  (parser templates-root funs (lexer (read-file templates-root template-name))))
-  ;(map #(.contents %) (lexer (read-file templates-root template-name))))
+  (parser templates-root funcs (lexer (read-file templates-root template-name))))
