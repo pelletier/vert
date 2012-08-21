@@ -85,56 +85,58 @@
   (Node. (.node-type node) (.token node) children))
 
 
-(defn create-tree []
-  (zip/zipper tree-branch? tree-children tree-make-node (Node. :root nil [])))
+(defn create-tree
+  ([] (zip/zipper tree-branch? tree-children tree-make-node (Node. :root nil []))) 
+  ([node] (zip/zipper tree-branch? tree-children tree-make-node node)))
 
 
 ; assume the first token in the tokens list is the first token inside the block.
 (defn get-block-tokens [tokens]
   (let [block-name (extract-block-name (first tokens))
         end-block-name (str "end" block-name)]
-    (loop [rem-tokens (rest tokens)
-            counter 1
-            index 0]
-      (let [tokens-rest (rest rem-tokens)]
+    (loop [rem-tokens (subvec tokens 1)
+           counter 1
+           index 1]
         (cond
-          (= counter 0) (subs tokens index)
+          (= counter 0) (subvec tokens 0 index)
           (empty? rem-tokens) (throw (unbalanced-block))
           :else (let [tok-name (extract-block-name (first rem-tokens))
                       next-count (cond
                                    (contains? {end-block-name "end"} tok-name) (dec counter)
                                    (= block-name tok-name) (inc counter)
                                    :else counter)]
-                  (recur tokens-rest next-count (inc index))))))))
+                  (recur (subvec rem-tokens 1) next-count (inc index)))))))
 
 
 ;; Yeah not the most useful function ever wrote, but I think it makes the code a
 ;; little easier to read.
 (defn skip-tokens [tokens n]
-  (subs tokens n))
+  (subvec tokens n))
 
 
-;; TODO implement me!
+;; FIXME there must be a sexier way than calling (declare).
+(declare parser-tree)
 (defn create-block-tree [tokens]
-  ())
+  (parser-tree (subvec tokens 1 (dec (count tokens)))
+               (create-tree (Node. :block (first tokens) []))))
 
+(defn parser-tree [remaining-tokens tree]
+  (if (empty? remaining-tokens)
+    (zip/root tree)
+    (let [token (first remaining-tokens)
+          tokens-rest (rest remaining-tokens)]
+      (condp = (.token-type token)
+        :text (recur tokens-rest (zip/append-child tree (Node. :text token nil)))
+        :variable  (recur tokens-rest (zip/append-child tree (Node. :variable token nil)))
+        :comment (recur tokens-rest (zip/append-child tree (Node. :comment token nil)))
+        :block (let [vremaining-tokens (vec remaining-tokens)
+                     block-tokens (get-block-tokens vremaining-tokens)
+                     skipped-tokens (count block-tokens)]
+                 (recur (skip-tokens vremaining-tokens skipped-tokens)
+                        (zip/append-child tree (create-block-tree block-tokens))))))))
 
-(defn parser [templates-root funcs tokens-vector]
-  (loop [remaining-tokens tokens-vector
-         tree (create-tree)]
-    (if (empty? remaining-tokens)
-      tree
-      (let [token (first remaining-tokens)
-            tokens-rest (rest remaining-tokens)]
-        (condp = (.token-type token)
-          :text (recur tokens-rest (zip/append-child tree (Node. :text token nil)))
-          :variable  (recur tokens-rest (zip/append-child tree (Node. :variable token nil)))
-          :comment (recur tokens-rest (zip/append-child tree (Node. :comment token nil)))
-          :block (let [block-tokens (get-block-tokens remaining-tokens)
-                       skipped-tokens (count block-tokens)]
-                   (recur (skip-tokens remaining-tokens skipped-tokens)
-                          (zip/append-child tree (create-block-tree block-tokens)))))))))
-
+(defn parser [tokens-vector]
+  (parser-tree tokens-vector (create-tree)))
 
 (defn render
   "Render a template file using the given context.
@@ -143,4 +145,4 @@
    context is a map of available variables.
    template-name is the path of your template file, relative to tempalates-root."
   [funcs templates-root, context, template-name]
-  (parser templates-root funcs (lexer (read-file templates-root template-name))))
+  (parser (lexer (read-file templates-root template-name))))
