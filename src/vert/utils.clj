@@ -7,7 +7,8 @@
 ;; resulting list.
 (defn re-tokenize [re text]
   (let [matcher (re-matcher re text)]
-    (defn inner [last-index result]
+    (loop [last-index 0
+           result []]
       (if (.find matcher)
         (let [start-index (.start matcher)
               end-index (.end matcher)
@@ -16,8 +17,7 @@
           (if (string/blank? insert)
             (recur end-index (conj result match))
             (recur end-index (conj result insert match))))
-        (conj result (subs text last-index))))
-    (inner 0 [])))
+        (conj result (subs text last-index))))))
 
 
 ;; Count the number of occurrences of a char in a string.
